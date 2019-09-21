@@ -1,0 +1,364 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import pandas as pd\n",
+    "import numpy as np\n",
+    "import os"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "pd.options.mode.chained_assignment = None\n",
+    "pd.set_option('display.max_rows', 50)\n",
+    "pd.set_option('display.max_columns', 300)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {
+    "scrolled": true
+   },
+   "outputs": [],
+   "source": [
+    "YEAR = 2019\n",
+    "WEEK = 2"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {
+    "scrolled": false
+   },
+   "outputs": [],
+   "source": [
+    "#Change to your path for play by play data\n",
+    "data = pd.read_csv(os.getcwd()+'//play_data//play_by_play_data//cleaned//regular//regular_season_'+str(YEAR)+'.csv',\n",
+    "                  low_memory=False)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "data = data.loc[(data.wp < .95) & (data.def_wp < .95)]"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#Create season long EPA/play for both offense and defense\n",
+    "run_epas = data.loc[data.play_type=='run'].groupby(by='posteam')[['epa','success']].mean()\n",
+    "run_epas[['def_epa','def_success']] = data.loc[data.play_type=='run'].groupby(by='defteam')[['epa','success']].mean()\n",
+    "run_epas.columns = [['off_epa','off_success','def_epa','def_success']]\n",
+    "\n",
+    "pass_epas = data.loc[data.play_type=='pass'].groupby(by='posteam')[['epa','success']].mean()\n",
+    "pass_epas[['def_epa','def_success']] = data.loc[data.play_type=='pass'].groupby(by='defteam')[['epa','success']].mean()\n",
+    "pass_epas.columns = [['off_epa','off_success','def_epa','def_success']]"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#Alphabetical list of teams\n",
+    "teams = list(set(data.posteam))\n",
+    "teams.sort()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#Change to your path for game info (also from nflscrapR)\n",
+    "game_info = pd.read_csv(os.getcwd()+'//play_data//game_info//regular_game_info.csv')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "game_info = game_info.loc[game_info.season==YEAR]"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#Empty lists for final numbers\n",
+    "net_epa_run_off = []\n",
+    "net_epa_run_def = []\n",
+    "net_epa_pass_off = []\n",
+    "net_epa_pass_def = []\n",
+    "\n",
+    "net_success_run_off = []\n",
+    "net_success_run_def = []\n",
+    "net_success_pass_off = []\n",
+    "net_success_pass_def = []\n",
+    "\n",
+    "schedules = {}\n",
+    "\n",
+    "for i in teams:\n",
+    "    #Get game_ids and teams\n",
+    "    games = game_info[['game_id','away_team','home_team']].loc[\n",
+    "        (game_info['away_team']==i) | (game_info['home_team']==i)]\n",
+    "    \n",
+    "    off_df = pd.DataFrame()\n",
+    "    def_df = pd.DataFrame()\n",
+    "    \n",
+    "    off_epa_run_perfs = []\n",
+    "    def_epa_run_perfs = []\n",
+    "    off_epa_pass_perfs = []\n",
+    "    def_epa_pass_perfs = []\n",
+    "    \n",
+    "    off_success_run_perfs = []\n",
+    "    def_success_run_perfs = []\n",
+    "    off_success_pass_perfs = []\n",
+    "    def_success_pass_perfs = []\n",
+    "    \n",
+    "    opponent_names = []\n",
+    "    opponent_def_epa_run_avgs = []\n",
+    "    opponent_off_epa_run_avgs = []\n",
+    "    opponent_def_epa_pass_avgs = []\n",
+    "    opponent_off_epa_pass_avgs = []\n",
+    "    \n",
+    "    opponent_def_success_run_avgs = []\n",
+    "    opponent_off_success_run_avgs = []\n",
+    "    opponent_def_success_pass_avgs = []\n",
+    "    opponent_off_success_pass_avgs = []\n",
+    "    \n",
+    "    for j in range(0,len(games)):\n",
+    "        plays = data.loc[data.game_id==games.game_id.iloc[j]]\n",
+    "        \n",
+    "        #Assign which team is the opponent\n",
+    "        if games.home_team.iloc[j] == i:\n",
+    "            opponent = games.away_team.iloc[j]\n",
+    "        else:\n",
+    "            opponent = games.home_team.iloc[j]\n",
+    "            \n",
+    "        opponent_names.append(opponent)\n",
+    "        \n",
+    "        #Add to list the game performance of EPA/play\n",
+    "        off_epa_run_perfs.append(plays.epa.loc[(plays.posteam==i) & (plays.play_type=='run')].mean())\n",
+    "        def_epa_run_perfs.append(plays.epa.loc[(plays.defteam==i) & (plays.play_type=='run')].mean())\n",
+    "        off_epa_pass_perfs.append(plays.epa.loc[(plays.posteam==i) & (plays.play_type=='pass')].mean())\n",
+    "        def_epa_pass_perfs.append(plays.epa.loc[(plays.defteam==i) & (plays.play_type=='pass')].mean())\n",
+    "        \n",
+    "        off_success_run_perfs.append(plays.success.loc[(plays.posteam==i) & (plays.play_type=='run')].mean())\n",
+    "        def_success_run_perfs.append(plays.success.loc[(plays.defteam==i) & (plays.play_type=='run')].mean())\n",
+    "        off_success_pass_perfs.append(plays.success.loc[(plays.posteam==i) & (plays.play_type=='pass')].mean())\n",
+    "        def_success_pass_perfs.append(plays.success.loc[(plays.defteam==i) & (plays.play_type=='pass')].mean())\n",
+    "        \n",
+    "        #Add to list the season averages for opponent team\n",
+    "        opponent_def_epa_run_avgs.append(float(run_epas.def_epa.loc[opponent].values))\n",
+    "        opponent_off_epa_run_avgs.append(float(run_epas.off_epa.loc[opponent].values))\n",
+    "        opponent_def_epa_pass_avgs.append(float(pass_epas.def_epa.loc[opponent].values))\n",
+    "        opponent_off_epa_pass_avgs.append(float(pass_epas.off_epa.loc[opponent].values))\n",
+    "    \n",
+    "        opponent_def_success_run_avgs.append(float(run_epas.def_success.loc[opponent].values))\n",
+    "        opponent_off_success_run_avgs.append(float(run_epas.off_success.loc[opponent].values))\n",
+    "        opponent_def_success_pass_avgs.append(float(pass_epas.def_success.loc[opponent].values))\n",
+    "        opponent_off_success_pass_avgs.append(float(pass_epas.off_success.loc[opponent].values))\n",
+    "    \n",
+    "    #Fill dataframes to make combined net calculation\n",
+    "    off_df['off_epa_run_perfs'] = off_epa_run_perfs\n",
+    "    off_df['opponent_def_epa_run_avgs'] = opponent_def_epa_run_avgs\n",
+    "    off_df['net_epa_run_off'] = off_df.off_epa_run_perfs - off_df.opponent_def_epa_run_avgs\n",
+    "    \n",
+    "    def_df['opponent_off_epa_run_avgs'] = opponent_off_epa_run_avgs\n",
+    "    def_df['def_epa_run_perfs'] = def_epa_run_perfs\n",
+    "    def_df['net_epa_run_def'] = def_df.opponent_off_epa_run_avgs - def_df.def_epa_run_perfs\n",
+    "        \n",
+    "    off_df['off_success_run_perfs'] = off_success_run_perfs\n",
+    "    off_df['opponent_def_success_run_avgs'] = opponent_def_success_run_avgs\n",
+    "    off_df['net_success_run_off'] = off_df.off_success_run_perfs - off_df.opponent_def_success_run_avgs\n",
+    "    \n",
+    "    def_df['opponent_off_success_run_avgs'] = opponent_off_success_run_avgs\n",
+    "    def_df['def_success_run_perfs'] = def_success_run_perfs\n",
+    "    def_df['net_success_run_def'] = def_df.opponent_off_success_run_avgs - def_df.def_success_run_perfs\n",
+    "    \n",
+    "    off_df['off_epa_pass_perfs'] = off_epa_pass_perfs\n",
+    "    off_df['opponent_def_epa_pass_avgs'] = opponent_def_epa_pass_avgs\n",
+    "    off_df['net_epa_pass_off'] = off_df.off_epa_pass_perfs - off_df.opponent_def_epa_pass_avgs\n",
+    "    \n",
+    "    def_df['opponent_off_epa_pass_avgs'] = opponent_off_epa_pass_avgs\n",
+    "    def_df['def_epa_pass_perfs'] = def_epa_pass_perfs\n",
+    "    def_df['net_epa_pass_def'] = def_df.opponent_off_epa_pass_avgs - def_df.def_epa_pass_perfs\n",
+    "        \n",
+    "    off_df['off_success_pass_perfs'] = off_success_pass_perfs\n",
+    "    off_df['opponent_def_success_pass_avgs'] = opponent_def_success_pass_avgs\n",
+    "    off_df['net_success_pass_off'] = off_df.off_success_pass_perfs - off_df.opponent_def_success_pass_avgs\n",
+    "    \n",
+    "    def_df['opponent_off_success_pass_avgs'] = opponent_off_success_pass_avgs\n",
+    "    def_df['def_success_pass_perfs'] = def_success_pass_perfs\n",
+    "    def_df['net_success_pass_def'] = def_df.opponent_off_success_pass_avgs - def_df.def_success_pass_perfs\n",
+    "    \n",
+    "    net_epa_run_off.append(float(off_df.net_epa_run_off.mean()))\n",
+    "    net_epa_run_def.append(float(def_df.net_epa_run_def.mean()))\n",
+    "    net_success_run_off.append(float(off_df.net_success_run_off.mean()))\n",
+    "    net_success_run_def.append(float(def_df.net_success_run_def.mean()))\n",
+    "    \n",
+    "    net_epa_pass_off.append(float(off_df.net_epa_pass_off.mean()))\n",
+    "    net_epa_pass_def.append(float(def_df.net_epa_pass_def.mean()))\n",
+    "    net_success_pass_off.append(float(off_df.net_success_pass_off.mean()))\n",
+    "    net_success_pass_def.append(float(def_df.net_success_pass_def.mean()))\n",
+    "    \n",
+    "    schedules.update({i:opponent_names})"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#Create dataframe for rankings\n",
+    "rankings = pd.DataFrame(index=teams)\n",
+    "\n",
+    "multiplier = 2\n",
+    "\n",
+    "#Add net epa ratings\n",
+    "rankings['Offense Net Pass EPA'] = net_epa_pass_off\n",
+    "rankings['Offense Net Pass Success'] = np.asarray(net_success_pass_off) * multiplier\n",
+    "\n",
+    "rankings['Offense Net Run EPA'] = net_epa_run_off\n",
+    "rankings['Offense Net Run Success'] = np.asarray(net_success_run_off) * multiplier\n",
+    "\n",
+    "rankings['Defense Net Pass EPA'] = net_epa_pass_def\n",
+    "rankings['Defense Net Pass Success'] = np.asarray(net_success_pass_def) * multiplier\n",
+    "\n",
+    "rankings['Defense Net Run EPA'] = net_epa_run_def\n",
+    "rankings['Defense Net Run Success'] = np.asarray(net_success_run_def) * multiplier\n",
+    "\n",
+    "rankings.reset_index(inplace=True)\n",
+    "rankings.rename(columns={'index':'Team'},inplace=True)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "rankings['Net Pass Offense'] = rankings['Offense Net Pass EPA'] + rankings['Offense Net Pass Success']\n",
+    "rankings['Net Run Offense'] = rankings['Offense Net Run EPA'] + rankings['Offense Net Run Success']\n",
+    "rankings['Offense Net Rank'] = rankings['Net Pass Offense'] + rankings['Net Run Offense']\n",
+    "\n",
+    "rankings['Net Pass Defense'] = rankings['Defense Net Pass EPA'] + rankings['Defense Net Pass Success']\n",
+    "rankings['Net Run Defense'] = rankings['Defense Net Run EPA'] + rankings['Defense Net Run Success']\n",
+    "rankings['Defense Net Rank'] = rankings['Net Pass Defense'] + rankings['Net Run Defense']\n",
+    "\n",
+    "rankings['Total Net Rank'] = (rankings['Offense Net Rank']*.7) + (rankings['Defense Net Rank']*.3)\n",
+    "\n",
+    "#Round numbers\n",
+    "rankings = rankings.round(3)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {
+    "scrolled": false
+   },
+   "outputs": [],
+   "source": [
+    "#Name change\n",
+    "rankings['Team'].loc[rankings['Team']=='JAC'] = 'JAX'\n",
+    "\n",
+    "if YEAR == 2016:\n",
+    "    rankings = rankings.dropna()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "first_page = rankings[['Team','Total Net Rank','Offense Net Rank','Defense Net Rank']]\n",
+    "index = first_page.Team\n",
+    "first_page = first_page.rank(axis=0,ascending=False,numeric_only=True).astype('int')\n",
+    "first_page.insert(0,'Team',index)\n",
+    "first_page.sort_values('Total Net Rank',inplace=True)\n",
+    "\n",
+    "second_page = rankings[['Team','Offense Net Rank','Net Pass Offense','Offense Net Pass EPA',\n",
+    "                        'Offense Net Pass Success','Net Run Offense','Offense Net Run EPA',\n",
+    "                        'Offense Net Run Success']].set_index('Team',drop=True).sort_index().rank(\n",
+    "                        axis=0,ascending=False).astype('int')\n",
+    "\n",
+    "third_page = rankings[['Team','Defense Net Rank','Net Pass Defense','Defense Net Pass EPA',\n",
+    "                       'Defense Net Pass Success','Net Run Defense','Defense Net Run EPA',\n",
+    "                       'Defense Net Run Success']].set_index('Team',drop=True).sort_index().rank(\n",
+    "                        axis=0,ascending=False).astype('int')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#Output rankings to excel\n",
+    "writer = pd.ExcelWriter(os.getcwd()+'//rankings//'+str(YEAR)+'//Week '+str(WEEK)+' Rankings ' + str(YEAR) + '.xlsx',\n",
+    "                       engine='xlsxwriter')\n",
+    "\n",
+    "first_page.to_excel(writer,sheet_name='Total Net Score',index=False)\n",
+    "second_page.to_excel(writer,sheet_name='Team Offense Rankings')\n",
+    "third_page.to_excel(writer,sheet_name='Team Defense Rankings')\n",
+    "\n",
+    "writer.save()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.7.3"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2
+}
